@@ -7,13 +7,14 @@ files. No ads, no points, no accounts.
 - Native save format: `.bnx` (a small zip: JSON + embedded resources)
 - Reads `.enbx` V5 packages (verified against EasiNote 5.2.4.11582)
 
-## Features (v0.1)
+## Features (26.1pre-release)
 
 - Pen / Highlighter / Eraser / Text / Rect / Ellipse / Line / Image tools
 - Multi-page sidebar (add / delete / duplicate)
 - Undo / redo per page, clear page
 - Open `.enbx` and `.bnx`, save `.bnx`, export current page as PNG
 - Color swatches + custom color, stroke width control
+- Support Chinese
 
 ## Quick start
 
