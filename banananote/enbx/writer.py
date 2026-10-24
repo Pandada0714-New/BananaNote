@@ -22,23 +22,30 @@ _REF_PREFIX = "ref:"
 
 
 def read_bnx(path: str) -> Doc:
-    with zipfile.ZipFile(path) as zf:
-        data = json.loads(zf.read("bnx.json").decode("utf-8"))
+    zf = zipfile.ZipFile(path)
+    data = json.loads(zf.read("bnx.json").decode("utf-8"))
     doc = Doc(
         name=data.get("name", "Untitled"),
         width=data.get("width", 1280),
         height=data.get("height", 720),
     )
+
+    def _resolve(ref: str) -> str:
+        if ref and ref.startswith(_REF_PREFIX):
+            try:
+                return b64encode(zf.read(ref[len(_REF_PREFIX):]))
+            except (KeyError, zipfile.BadZipFile):
+                return ""
+        return ref
+
     for p in data.get("pages", []):
         elements: list = []
         for el in p.get("elements", []):
             e = element_from_dict(el)
             if isinstance(e, ImageElement) and e.data_b64.startswith(_REF_PREFIX):
-                key = e.data_b64[len(_REF_PREFIX):]
-                try:
-                    with zipfile.ZipFile(path) as zf:  # keep fresh handle
-                        e.data_b64 = b64encode(zf.read(key))
-                except (KeyError, zipfile.BadZipFile):
+                if _resolve(e.data_b64):
+                    e.data_b64 = _resolve(e.data_b64)
+                else:
                     continue
             elements.append(e)
         for ink in p.get("ink", []):
@@ -47,6 +54,7 @@ def read_bnx(path: str) -> Doc:
                 elements.append(e)
         doc.pages.append(Page(
             background=p.get("background", "#FFFFFFFF"),
+            background_image=_resolve(p.get("background_image", "")),
             w=p.get("w", doc.width), h=p.get("h", doc.height),
             elements=elements,
         ))
@@ -62,6 +70,12 @@ def write_bnx(doc: Doc, path: str) -> None:
     idx = 0
     for page in doc.pages:
         els, inks = [], []
+        bg_image = page.background_image
+        if bg_image and not bg_image.startswith(_REF_PREFIX):
+            name = f"Resources/bg_{idx}.png"
+            idx += 1
+            resources[name] = b64decode(bg_image)
+            bg_image = _REF_PREFIX + name
         for el in page.elements:
             if el.kind == "ink":
                 inks.append(_clean(el.__dict__))
@@ -77,7 +91,9 @@ def write_bnx(doc: Doc, path: str) -> None:
             else:
                 els.append(_clean(el.__dict__))
         pages_json.append({
-            "background": page.background, "w": page.w, "h": page.h,
+            "background": page.background,
+            "background_image": bg_image,
+            "w": page.w, "h": page.h,
             "elements": els, "ink": inks,
         })
 

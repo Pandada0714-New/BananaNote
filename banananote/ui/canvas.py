@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, Signal, QObject
-from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import (QBrush, QColor, QFontDatabase, QImage, QPainter,
+                           QPainterPath, QPen, QPixmap, QTransform)
 from PySide6.QtWidgets import (QFileDialog, QGraphicsEllipseItem,
                                QGraphicsItem, QGraphicsLineItem,
                                QGraphicsPathItem, QGraphicsPixmapItem,
@@ -20,6 +21,37 @@ def qcolor(argb: str) -> QColor:
     c = QColor()
     c.setNamedColor(argb)
     return c
+
+
+def _make_pic(el: ImageElement) -> "PicItem":
+    """Build a pixmap item honouring optional crop + rotation.
+
+    The EasiNote DisplayRegion is expressed in post-rotation coordinates,
+    so cropping happens after rotating the image.
+    """
+    img = QImage.fromData(b64decode(el.data_b64))
+    want_transform = bool(el.crop or el.rotation)
+    if not img.isNull() and want_transform:
+        if el.crop:
+            nums = [n for n in el.crop.replace(" ", "").split(",") if n]
+            if len(nums) >= 4:
+                try:
+                    cx, cy, cw, ch = (float(v) for v in nums[:4])
+                except ValueError:
+                    cx, cy, cw, ch = 0.0, 0.0, 0.0, 0.0
+                r = QRectF(cx, cy, cw, ch).toRect()
+                if r.isValid() and QRectF(img.rect()).toRect().contains(r):
+                    img = img.copy(r)
+        if el.rotation:
+            img = img.transformed(QTransform().rotate(el.rotation))
+    pic = PicItem(b64decode(el.data_b64), img if want_transform else None)
+    pic.crop = el.crop
+    pic.item_rotation = el.rotation
+    pic.setPos(el.x, el.y)
+    pw, ph = pic._pix.width(), pic._pix.height()
+    if pw > 0 and ph > 0:
+        pic.setScale(max(0.01, min(el.width / pw, el.height / ph)))
+    return pic
 
 
 class CanvasSignals(QObject):
@@ -71,17 +103,32 @@ class InkItem(QGraphicsPathItem):
 
 
 class TextItem(QGraphicsTextItem):
+    _known_families: set[str] | None = None
+
     def __init__(self, x: float, y: float, text: str = "",
-                 font_size: float = 24.0, color: str = "#FF202020") -> None:
+                 font_size: float = 24.0, color: str = "#FF202020",
+                 font: str = "", rotation: float = 0.0,
+                 bold: bool = False, width: float = 0.0) -> None:
         super().__init__(text)
         self.setPos(x, y)
         self.setDefaultTextColor(qcolor(color))
         f = self.font()
-        f.setPointSizeF(max(8.0, font_size))
+        if font:
+            if TextItem._known_families is None:
+                TextItem._known_families = set(QFontDatabase.families())
+            if font in TextItem._known_families:
+                f.setFamily(font)  # else keep default -> CJK fallback
+        f.setPixelSize(max(2, round(font_size)))
+        f.setBold(bold)
         self.setFont(f)
         self.font_size = font_size
         self.color = color
+        self.font_name = font
         self._editing = True
+        if width > 0:
+            self.setTextWidth(width)
+        if rotation:
+            self.setRotation(rotation)
         self.setFlags(self.flags()
                       | QGraphicsItem.GraphicsItemFlag.ItemIsMovable
                       | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
@@ -103,10 +150,13 @@ class TextItem(QGraphicsTextItem):
         if self._editing:
             self.finish_editing()
         f = self.font()
+        px = f.pixelSize() if f.pixelSize() > 1 else 24
+        tw = self.textWidth()
         return TextElement(x=self.pos().x(), y=self.pos().y(),
                            text=self.toPlainText(),
-                           font_size=float(f.pointSizeF() or 24),
-                           color=self.color)
+                           font_size=float(px), color=self.color,
+                           font=self.font_name, bold=f.bold(),
+                           width=tw if tw > 0 else 0.0)
 
 
 class ShapeLikeItem:
@@ -164,12 +214,17 @@ class LineItem(QGraphicsLineItem):
 
 
 class PicItem(QGraphicsPixmapItem):
-    def __init__(self, data: bytes) -> None:
+    def __init__(self, data: bytes, image: QImage | None = None) -> None:
         super().__init__()
         self._data = data
-        self._pix = QPixmap()
-        self._pix.loadFromData(data)
+        if image is not None and not image.isNull():
+            self._pix = QPixmap.fromImage(image)
+        else:
+            self._pix = QPixmap()
+            self._pix.loadFromData(data)
         self.setPixmap(self._pix)
+        self.crop = ""          # preserved through edit round-trips
+        self.item_rotation = 0.0
         self.setFlags(self.flags()
                       | QGraphicsItem.GraphicsItemFlag.ItemIsMovable
                       | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
@@ -187,16 +242,34 @@ class PicItem(QGraphicsPixmapItem):
         h = r.height() * self.scale()
         return ImageElement(x=self.pos().x(), y=self.pos().y(),
                             width=w, height=h,
-                            data_b64=b64encode(self._data))
+                            data_b64=b64encode(self._data),
+                            rotation=self.item_rotation, crop=self.crop)
 
 
 class BoardScene(QGraphicsScene):
-    def __init__(self, w: float, h: float, background: str = "#FFFFFFFF") -> None:
+    def __init__(self, w: float, h: float, background: str = "#FFFFFFFF",
+                 background_image: str = "") -> None:
         super().__init__(0, 0, w, h)
         self._bg = background
+        self._bg_image = background_image
+        self._bg_pix: QPixmap | None = None
         self._undo_stack: list[dict[str, Any]] = []
         self._redo_stack: list[dict[str, Any]] = []
         self.setBackgroundBrush(QBrush(qcolor(background)))
+
+    def drawBackground(self, painter: QPainter, rect: QRectF) -> None:  # noqa: N802
+        """Slide color + stretched background bitmap behind every item."""
+        painter.fillRect(rect, qcolor(self._bg))
+        if not self._bg_image:
+            return
+        if self._bg_pix is None:
+            pix = QPixmap()
+            pix.loadFromData(b64decode(self._bg_image))
+            self._bg_pix = pix.scaled(
+                int(self.width()), int(self.height()),
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+        painter.drawPixmap(0, 0, self._bg_pix)
 
     def build_model(self):
         els = []
@@ -238,7 +311,7 @@ class BoardView(QGraphicsView):
     def _hist_push(self) -> None:
         """Snapshot the scene right before it mutates (call at press-time)."""
         scene = self.scene()
-        scene._undo_stack.append({"bg": scene._bg,
+        scene._undo_stack.append({"bg": scene._bg, "bgi": scene._bg_image,
                                   "els": scene.build_model()})
         scene._redo_stack.clear()
 
@@ -248,15 +321,18 @@ class BoardView(QGraphicsView):
             return
         self._hist_now_push_to_redo()
         st = scene._undo_stack.pop()
-        self.load_elements(st["els"], scene.width(), scene.height(), st["bg"])
+        self.load_elements(st["els"], scene.width(), scene.height(),
+                           st["bg"], st.get("bgi", ""))
 
     def hist_redo(self) -> None:
         scene = self.scene()
         if not scene._redo_stack:
             return
-        scene._undo_stack.append({"bg": scene._bg, "els": scene.build_model()})
+        scene._undo_stack.append({"bg": scene._bg, "bgi": scene._bg_image,
+                                  "els": scene.build_model()})
         st = scene._redo_stack.pop()
-        self.load_elements(st["els"], scene.width(), scene.height(), st["bg"])
+        self.load_elements(st["els"], scene.width(), scene.height(),
+                           st["bg"], st.get("bgi", ""))
 
     def _hist_now_push_to_redo(self) -> None:
         scene = self.scene()
@@ -378,13 +454,14 @@ class BoardView(QGraphicsView):
 
     # ----------------------------------------------------------------- import
     def load_elements(self, elements, width: float, height: float,
-                      background: str) -> None:
+                      background: str, background_image: str = "") -> None:
         scene = self.scene()
         for it in list(scene.items()):
             scene.removeItem(it)
         scene.setSceneRect(0, 0, width, height)
-        scene.setBackgroundBrush(QBrush(qcolor(background)))
         scene._bg = background
+        scene._bg_image = background_image
+        scene._bg_pix = None
         self.fit_in(width, height)
         for el in elements:
             if isinstance(el, InkElement):
@@ -393,7 +470,12 @@ class BoardView(QGraphicsView):
                 ink.rebuild()
                 scene.addItem(ink)
             elif isinstance(el, TextElement):
-                scene.addItem(TextItem(el.x, el.y, el.text, el.font_size, el.color))
+                it = TextItem(el.x, el.y, el.text, el.font_size, el.color,
+                              getattr(el, "font", ""),
+                              getattr(el, "rotation", 0.0),
+                              getattr(el, "bold", False),
+                              getattr(el, "width", 0.0))
+                scene.addItem(it)
             elif isinstance(el, ShapeElement):
                 if el.shape == "rect":
                     it = RectItem(QRectF(el.x, el.y, el.width, el.height))
@@ -404,11 +486,13 @@ class BoardView(QGraphicsView):
                                   el.stroke_color, el.stroke_width)
                 if not isinstance(it, LineItem):
                     it.apply_style(el.stroke_color, el.fill_color, el.stroke_width)
+                if getattr(el, "rotation", 0.0):
+                    it.setTransformOriginPoint(
+                        el.x + el.width / 2, el.y + el.height / 2)
+                    it.setRotation(el.rotation)
                 scene.addItem(it)
             elif isinstance(el, ImageElement):
-                pic = PicItem(b64decode(el.data_b64))
-                pic.setPos(el.x, el.y)
-                pic.fit_to(el.width, el.height)
+                pic = _make_pic(el)
                 scene.addItem(pic)
 
     def fit_in(self, width: float, height: float) -> None:

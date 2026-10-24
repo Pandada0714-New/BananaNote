@@ -7,14 +7,22 @@ files. No ads, no points, no accounts.
 - Native save format: `.bnx` (a small zip: JSON + embedded resources)
 - Reads `.enbx` V5 packages (verified against EasiNote 5.2.4.11582)
 
-## Features (26.1pre-release)
+## Features (26.1-prerelease-2)
 
 - Pen / Highlighter / Eraser / Text / Rect / Ellipse / Line / Image tools
 - Multi-page sidebar (add / delete / duplicate)
 - Undo / redo per page, clear page
 - Open `.enbx` and `.bnx`, save `.bnx`, export current page as PNG
 - Color swatches + custom color, stroke width control
-- Support Chinese
+- Structural `.enbx` import (new in prerelease-2):
+  - slide order / size / page backgrounds (color and full-page images)
+  - text boxes with font family / size / color / bold and wrap width
+  - pictures with source crop and rotation, videos (poster frame), audio
+    (speaker icon + file name label)
+  - shapes: rectangles, ellipses, hand-drawn paths, embedded captions
+  - tables (grid lines, merged cells, per-cell text), mind-map topic texts,
+    classical-poetry panels (title / author / body)
+  - unmapped widgets are skipped safely and listed in the status bar
 
 ## Quick start
 
@@ -52,22 +60,29 @@ The exe appears in `dist/BananaNote/`.
 Board.xml          slide size + ordered slide GUID list
 Slides/Slide_N.xml per-slide size / background / element markup
 Document.xml       metadata
-Resources/ Media/  embedded images & media
+Resources/ Media/  embedded images & media (payloads are plain PNG/JPEG/MP4)
 SlideThumbnails/   pre-rendered page thumbnails
 ```
 
-Page structure, size, order and background parse hard. Element markup inside
-slides is undocumented, so element conversion is heuristic: text / ink /
-image / shape nodes are matched by tag-name hints. Real courseware with rich
-content helps calibrate this quickly - run the debug_dump command above on
-such a file and share the output.
+The importer parses the slide structure directly: `Board.xml` gives the page
+order, each `Slide_N.xml` lists elements that are converted element by
+element. Media is referenced through `id://<uuid>` keys into `Resources/`;
+the payload bytes identify the real format.
+
+Verified against a real 29-slide grade-2 language courseware (`春.enbx`): all
+pages, backgrounds, images, shapes, tables, texts and media land where the
+original EasiNote render puts them. Known limitations:
+
+- animations / page transitions are ignored (reported after import)
+- topic (mind-map) connector lines are not drawn; node texts are kept
+- some decorative crop/aspect edge cases are approximate
 
 Elements that cannot be mapped are skipped safely and reported in the status
 bar after opening (nothing crashes, nothing silently vanishes without a note).
 
 ## Roadmap
 
-- [ ] Calibrate element parser against real rich courseware
+- [ ] Topic connector lines; audio/video playback in-app
 - [ ] Export all pages to PDF
 - [ ] Table / chemistry / geometry widget equivalents
 - [ ] Displaydriver-friendly fullscreen presentation mode

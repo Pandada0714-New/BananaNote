@@ -209,11 +209,13 @@ class MainWindow(QMainWindow):
         self._sync_page_model()
         self.current_page = index
         page = self.doc.pages[index]
-        scene = BoardScene(page.w, page.h, page.background)
+        scene = BoardScene(page.w, page.h, page.background,
+                           page.background_image)
         old_view_scene = self.view.scene()
         self.view.setScene(scene)
         del old_view_scene
-        self.view.load_elements(page.elements, page.w, page.h, page.background)
+        self.view.load_elements(page.elements, page.w, page.h,
+                                page.background, page.background_image)
         self.view.set_mode(self.view.mode)
         self._scene_doc_id = id(self.doc)
         self._scene_page = index
@@ -263,7 +265,8 @@ class MainWindow(QMainWindow):
         self._sync_page_model()
         import copy
         src = self.doc.pages[self.current_page]
-        new = Page(background=src.background, w=src.w, h=src.h,
+        new = Page(background=src.background, background_image=src.background_image,
+                   w=src.w, h=src.h,
                    elements=copy.deepcopy(src.elements))
         self.doc.pages.insert(self.current_page + 1, new)
         self.current_page += 1

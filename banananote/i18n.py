@@ -7,7 +7,7 @@ LANGS = ["en", "zh"]
 TABLES: dict[str, dict[str, str]] = {
     "en": {
         "app_title": "BananaNote",
-        "ready": "Ready — BananaNote v0.1",
+        "ready": "Ready — BananaNote 26.1-prerelease-2",
         "menu_settings": "&Settings",
         "menu_language": "&Language",
         "lang_en": "English",
@@ -62,7 +62,7 @@ TABLES: dict[str, dict[str, str]] = {
     },
     "zh": {
         "app_title": "BananaNote",
-        "ready": "就绪 — BananaNote v0.1",
+        "ready": "就绪 — BananaNote 26.1-prerelease-2",
         "menu_settings": "&设置",
         "menu_language": "语言(&L)",
         "lang_en": "English",

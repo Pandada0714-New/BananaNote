@@ -21,6 +21,7 @@ class TextElement:
     bold: bool = False
     italic: bool = False
     rotation: float = 0.0
+    width: float = 0.0  # wrap width in px; 0 = no wrap
     kind: str = "text"
 
 
@@ -32,6 +33,7 @@ class ImageElement:
     height: float
     data_b64: str = ""  # base64 of the image bytes
     rotation: float = 0.0
+    crop: str = ""  # "x, y, w, h" in natural pixels; empty = no crop
     kind: str = "image"
 
 
@@ -61,6 +63,7 @@ class ShapeElement:
 @dataclass
 class Page:
     background: str = "#FFFFFFFF"
+    background_image: str = ""  # b64 of the background image, empty = plain color
     w: float = DEFAULT_SLIDE_W
     h: float = DEFAULT_SLIDE_H
     elements: list[Any] = field(default_factory=list)
@@ -68,6 +71,7 @@ class Page:
     def to_dict(self) -> dict[str, Any]:
         return {
             "background": self.background,
+            "background_image": self.background_image,
             "w": self.w,
             "h": self.h,
             "elements": [asdict(e) for e in self.elements if e.kind != "ink"],
@@ -81,6 +85,7 @@ class Doc:
     pages: list[Page] = field(default_factory=list)
     width: float = DEFAULT_SLIDE_W
     height: float = DEFAULT_SLIDE_H
+    warnings: list[str] = field(default_factory=list)
 
     @classmethod
     def blank(cls, name: str = "Untitled") -> "Doc":
