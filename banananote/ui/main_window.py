@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QSettings
+from PySide6.QtCore import Qt, Signal, QSettings, QEvent
 from PySide6.QtGui import (QAction, QActionGroup, QImage, QKeySequence,
-                           QPainter, QColor)
-from PySide6.QtWidgets import (QColorDialog, QFileDialog, QHBoxLayout, QLabel,
-                               QListWidget, QListWidgetItem, QMainWindow,
+                           QPainter, QColor, QPixmap, QShortcut)
+from PySide6.QtWidgets import (QColorDialog, QDialog, QFileDialog, QHBoxLayout,
+                               QLabel, QListWidget, QListWidgetItem, QMainWindow,
                                QMessageBox, QPushButton, QSpinBox, QToolBar,
                                QVBoxLayout, QWidget, QToolButton)
 
@@ -17,6 +17,7 @@ from ..enbx.reader import read_enbx
 from ..enbx.writer import read_bnx, write_bnx
 from .. import i18n
 from .canvas import BoardScene, BoardView, CanvasSignals, qcolor
+from .present import PresentWindow
 
 COLORS = ["#FF202020", "#FFD32F2F", "#FF2E7D32", "#FF1565C0",
           "#FFF9A825", "#FFFFFFFF"]
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow):
 
         cfg = QSettings()
         i18n.set_language(cfg.value("ui/language", i18n.detect_default()))
+        self._present: PresentWindow | None = None
 
         self.setWindowTitle(i18n.tr("app_title"))
         self.resize(1280, 800)
@@ -44,6 +46,11 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_central()
         self._build_statusbar()
+        self._egg_clicks = 0
+        self._egg_last = 0.0
+        self._statusbar.installEventFilter(self)
+        self._egg_shortcut = QShortcut(QKeySequence("Ctrl+Alt+U"), self)
+        self._egg_shortcut.activated.connect(self.show_upgrade_easter_egg)
         self.load_page(0)
 
     # ----------------------------------------------------------------- menus
@@ -62,6 +69,9 @@ class MainWindow(QMainWindow):
             group.addAction(act)
             lang_menu.addAction(act)
             self._lang_actions[code] = act
+        act = QAction(i18n.tr("menu_upgrade_memory"), self)
+        act.triggered.connect(self.show_upgrade_easter_egg)
+        self._menu_settings.addAction(act)
 
     def switch_language(self, code: str) -> None:
         if code == i18n.get_language():
@@ -167,6 +177,10 @@ class MainWindow(QMainWindow):
         bar.addSeparator()
         bar.addAction(i18n.tr("open"), self.open_file)
         bar.addAction(i18n.tr("save"), self.save_file)
+
+        bar.addSeparator()
+        pres = bar.addAction(i18n.tr("present"), self.open_present)
+        pres.setShortcut(QKeySequence("F5"))
 
     def _build_statusbar(self) -> None:
         self._statusbar = self.statusBar()
@@ -346,6 +360,70 @@ class MainWindow(QMainWindow):
         painter.end()
         img.save(fn)
         self.statusBar().showMessage(i18n.tr("status_exported", file=fn))
+
+    # -------------------------------------------------------------- presenter
+    def open_present(self) -> None:
+        present = self._present
+        if present is not None and present.isVisible():
+            present.raise_()
+            present.activateWindow()
+            return
+        self._sync_page_model()
+        self._present = PresentWindow(self.doc, self.current_page)
+        self._present.finished_present.connect(self._present_finished)
+        self._present.showFullScreen()
+
+    def _present_finished(self, changed: bool) -> None:
+        present = self._present
+        if present is None:
+            return
+        if changed:
+            self._detach_scene()  # scene is stale; never back-write it
+            self.current_page = present.current_page
+            self.refresh_page_list()
+            self.load_page(self.current_page)
+            self.dirty = True
+        self.statusBar().showMessage(i18n.tr("status_present_ended"))
+
+    # -------------------------------------------------------------- easter egg
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        if obj is self._statusbar and \
+                event.type() == QEvent.Type.MouseButtonPress and \
+                event.button() == Qt.MouseButton.LeftButton:
+            self._egg_bump()
+        return super().eventFilter(obj, event)
+
+    def _egg_bump(self) -> None:
+        """5 clicks on the status bar within a short time unlock the surprise."""
+        import time
+        now = time.monotonic()
+        if now - self._egg_last > 3.0:
+            self._egg_clicks = 0
+        self._egg_last = now
+        self._egg_clicks += 1
+        if self._egg_clicks >= 5:
+            self._egg_clicks = 0
+            self.show_upgrade_easter_egg()
+
+    def show_upgrade_easter_egg(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle(i18n.tr("easter_title"))
+        lay = QVBoxLayout(dlg)
+        pic = QLabel()
+        pix = QPixmap(str(Path(__file__).parent / "res" / "upgrade_memory.png"))
+        if not pix.isNull():
+            pic.setPixmap(pix.scaled(
+                320, 520, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+        else:
+            pic.setText(i18n.tr("easter_title"))
+        pic.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(pic)
+        cap = QLabel(i18n.tr("easter_caption"), dlg)
+        cap.setWordWrap(True)
+        cap.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        lay.addWidget(cap)
+        dlg.exec()
 
     # -------------------------------------------------------------- lifecycle
     def resizeEvent(self, event) -> None:  # noqa: N802

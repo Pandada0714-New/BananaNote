@@ -10,6 +10,7 @@ TABLES: dict[str, dict[str, str]] = {
         "ready": "Ready — BananaNote 26.1-prerelease-2",
         "menu_settings": "&Settings",
         "menu_language": "&Language",
+        "menu_upgrade_memory": "Upgrade Memory &Image",
         "lang_en": "English",
         "lang_zh": "简体中文",
         # tools
@@ -31,6 +32,13 @@ TABLES: dict[str, dict[str, str]] = {
         "export_png": "Export PNG",
         "open": "Open .enbx / .bnx",
         "save": "Save .bnx",
+        "present": "Present (F5)",
+        "present_title": "BananaNote — Presentation",
+        "present_exit": "Exit (Esc)",
+        "present_prev": "◀ Prev",
+        "present_next": "Next ▶",
+        "present_page_label": "Page {i} / {n}",
+        "status_present_ended": "Presentation ended — annotations kept",
         "new_page": "New Page",
         "delete_page": "Delete Page",
         "duplicate": "Duplicate",
@@ -53,6 +61,11 @@ TABLES: dict[str, dict[str, str]] = {
         "status_page": "Page {i} — {n} elements",
         "save_default_name": "untitled.bnx",
         # messages
+        "easter_title": "Level up! Lv11 Silver 🎉",
+        "easter_caption":
+            "You found the hidden easter egg! Teacher panda has been using "
+            "EasiNotes for 1622 days, created 121 courseware files, and just "
+            "reached Lv11 Silver — top 55.9% nationwide.",
         "msg_open_failed": "Open failed",
         "msg_unsaved_title": "Unsaved changes",
         "msg_unsaved": "You have unsaved changes. Save before quitting?",
@@ -65,6 +78,7 @@ TABLES: dict[str, dict[str, str]] = {
         "ready": "就绪 — BananaNote 26.1-prerelease-2",
         "menu_settings": "&设置",
         "menu_language": "语言(&L)",
+        "menu_upgrade_memory": "升级记忆图片(&I)",
         "lang_en": "English",
         "lang_zh": "简体中文",
         "tool_select": "选择",
@@ -85,6 +99,13 @@ TABLES: dict[str, dict[str, str]] = {
         "export_png": "导出 PNG",
         "open": "打开 .enbx / .bnx",
         "save": "保存 .bnx",
+        "present": "放映 (F5)",
+        "present_title": "BananaNote — 放映模式",
+        "present_exit": "结束放映 (Esc)",
+        "present_prev": "◀ 上一页",
+        "present_next": "下一页 ▶",
+        "present_page_label": "第 {i} / {n} 页",
+        "status_present_ended": "放映结束 — 批注已保留",
         "new_page": "新建页",
         "delete_page": "删除页",
         "duplicate": "复制本页",
@@ -103,6 +124,10 @@ TABLES: dict[str, dict[str, str]] = {
         "status_cleared": "本页已清空",
         "status_page": "第 {i} 页 — {n} 个元素",
         "save_default_name": "未命名.bnx",
+        "easter_title": "恭喜升级！Lv11 白银 🎉",
+        "easter_caption":
+            "你发现了 BananaNote 的隐藏彩蛋！panda 老师已使用希沃白板 1622 天，"
+            "制作过 121 份课件，等级已超过全国 55.9% 的老师——恭喜升级 Lv11 白银！",
         "msg_open_failed": "打开失败",
         "msg_unsaved_title": "未保存",
         "msg_unsaved": "存在未保存的更改，退出前保存吗？",

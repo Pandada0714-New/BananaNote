@@ -85,5 +85,6 @@ bar after opening (nothing crashes, nothing silently vanishes without a note).
 - [ ] Topic connector lines; audio/video playback in-app
 - [ ] Export all pages to PDF
 - [ ] Table / chemistry / geometry widget equivalents
-- [ ] Displaydriver-friendly fullscreen presentation mode
+- [x] Fullscreen presentation mode (F5): pen / highlighter / eraser /
+  shapes / text only, page flip, annotations sync back
 - [ ] Element-level undo and clipboard
